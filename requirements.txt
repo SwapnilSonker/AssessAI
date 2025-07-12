@@ -3,3 +3,7 @@ langchain
 faiss-cpu
 llama-index
 groq
+transformers 
+sentence-transformers
+accelerate
+pillow 
