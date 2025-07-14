@@ -1,63 +1,75 @@
-from transformers import AutoProcessor, AutoModelForVision2Seq, AutoConfig, Qwen2_5_VLForConditionalGeneration
+# from transformers import AutoProcessor, AutoModelForVision2Seq, AutoConfig, Qwen2_5_VLForConditionalGeneration
 from PIL import Image
+import torch.nn as nn
 import torch
+from huggingface_hub import snapshot_download
 
-# Load processor and model
-# processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
-# model = AutoModelForVision2Seq.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
-# config = AutoConfig.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
+# To know the local location of the model downloaded
+# local_model_path = snapshot_download("Qwen/Qwen2.5-3B-Instruct")
+# print("📁 Model is stored at:", local_model_path)
 
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-    "Qwen/Qwen2.5-VL-3B-Instruct",
-    torch_dtype=torch.float16,
-    device_map="auto",
-    attn_implementation="sdpa"
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model_name = "Qwen/Qwen2.5-3B-Instruct"
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype="auto",
+    device_map="auto"
 )
+print(f"model : {model}")
 
-processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct")
+
+# Access layer 0's attention query projection weights 
+# q_proj_weights_0 = model.model.layers[0].self_attn.q_proj.weight
+# print(f"q_proj_weights : {q_proj_weights_0}") 
+
+# q_proj_weights_1 = model.model.layers[1].self_attn.q_proj.weight
+# print(f"q_proj_weights_1 : {q_proj_weights_1}")
+
+# q_proj_weights_2 = model.model.layers[2].self_attn.q_proj.weight
+# print(f"q_proj_weights_2 : {q_proj_weights_2}")
+
+# <---- The below is used to print the self attention weights of the model ----->
+# for i in range(0, 35):
+#     q_proj_weights = model.model.layers[i].self_attn.q_proj.weight
+#     print(f"q_proj_weights_{i} : {q_proj_weights}")
+
+
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+prompt = "Give me a short introduction to large language model."
 messages = [
-    {
-        "role": "system",
-        "content": [
-            {
-                "type": "text",
-                "text": "You are an expert in data extraction and you have to extract all the relevant contents from the image."
-            }
-        ]
-    },
-    {
-        "role": "user",
-        "content": [
-            {
-                "type": "image",
-                "path": "/Users/swapnilsonker/AssesaAI/Logic/image1.jpeg"
-            },
-            {
-                "type": "text",
-                "text": "Describe this image in detail"
-            }
-        ]
-    }
+    {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+    {"role": "user", "content": prompt}
 ]
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-inputs = processor.apply_chat_template(
+text = tokenizer.apply_chat_template(
     messages,
-    add_generation_prompt = True,
-    tokenize = True,
-    return_dict = True,
-    return_tensors = "pt"
-).to(device)
+    tokenize=False,
+    add_generation_prompt=True
+)
+model_inputs = tokenizer([text], return_tensors="pt").to(model.device)
 
-generated_ids = model.generate(**inputs, max_new_tokens = 512)
-generated_ids_trimmed = [
-    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids , generated_ids)
-]
+output_1 = model.generate(**model_inputs , max_new_tokens = 1024)
 
-output_text = processor.batch_decode(
-    generated_ids_trimmed , skip_special_tokens = True 
-)[0]
+for i in range(0, 3):
+    model.model.layers[i].mlp.act_fn = nn.ReLU()   # -> now modifying the layer 0 
 
-print(f"output text : {output_text}")
+output_2 = model.generate(**model_inputs , max_new_tokens = 1024)
 
+print(f"output_1 : {tokenizer.decode(output_1[0], skip_special_tokens = True)}")
+print(f"output_2 : {tokenizer.decode(output_2[0], skip_special_tokens = True)}")
+
+print(f"model : {model}")
+
+# generated_ids = model.generate(
+#     **model_inputs,
+#     max_new_tokens=512
+# )
+# generated_ids = [
+#     output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+# ]
+
+# response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+
+# print(f"response : {response}")
