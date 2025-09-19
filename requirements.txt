@@ -7,3 +7,5 @@ transformers
 sentence-transformers
 accelerate
 pillow 
+matplotlib
+seaborn
